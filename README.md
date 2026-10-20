@@ -49,6 +49,16 @@ Core tests run anywhere Swift runs:
 swift test
 ```
 
+## TestFlight (no Mac needed)
+
+`.github/workflows/testflight.yml` archives, signs and uploads a build from GitHub Actions.
+
+1. Apple Developer Program membership, an App ID `com.jabol183.PromiseTracker` (no extra capabilities) and an app record in App Store Connect.
+2. App Store Connect → Users and Access → Integrations → App Store Connect API → create an **Admin** key.
+3. Repository secrets: `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (the full `.p8` text) and `APPLE_TEAM_ID`.
+4. Actions → **Release to TestFlight** → Run workflow. The build number is the workflow run number.
+5. Once Apple finishes processing, add yourself as an internal tester in App Store Connect → TestFlight and install it with the TestFlight app.
+
 ## Before release
 
 - Fill in `AppConfig` in `Features/Settings/SettingsView.swift` (support URL, privacy policy, App Store link).
