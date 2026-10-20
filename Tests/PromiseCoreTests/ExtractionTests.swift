@@ -93,6 +93,12 @@ final class RuleBasedExtractorTests: XCTestCase {
         XCTAssertEqual(p.first?.recipientName, "Ken")
     }
 
+    func testImperativeWithTimeAndDay() {
+        let p = commitments("Take the rubbish out at 5 pm today")
+        XCTAssertEqual(p.first?.title, "Take the rubbish out")
+        XCTAssertEqual(p.first?.deadlinePhrase, "at 5 pm today")
+    }
+
     func testNoteToSelfImperative() {
         let p = commitments("Send a reminder to Sarah on Tuesday")
         XCTAssertEqual(p.count, 1)
@@ -297,6 +303,17 @@ final class CaptureInterpreterTests: XCTestCase {
         let output = PromiseExtraction(promises: [ExtractedPromise(title: "Send the report", recipientName: "Sarah", sourceSpan: text)])
         let r = await interpreter(StubExtractor(output: output)).interpret(text, source: .voice, capturedAt: anchor, people: [], existing: [])
         XCTAssertNil(r.drafts[0].selectedDue)
+    }
+
+    func testDeadlineDroppedByModelIsRecoveredFromWordsAfterAction() async {
+        // Device run: the model returned only the title and no deadline.
+        let text = "Take the rubbish out at 5 pm today"
+        let output = PromiseExtraction(promises: [ExtractedPromise(title: "Take the rubbish out", sourceSpan: text)])
+        let r = await interpreter(StubExtractor(output: output)).interpret(text, source: .voice, capturedAt: anchor, people: [], existing: [])
+        XCTAssertEqual(r.drafts[0].title, "Take the rubbish out")
+        XCTAssertEqual(r.drafts[0].selectedDue?.local, local(2026, 10, 21, 17, 0))
+        XCTAssertTrue(r.drafts[0].uncertainFields.contains(.deadline))
+        XCTAssertTrue(r.drafts[0].canSave)
     }
 
     func testUndatedPromiseGetsNoDefaultDate() async {
