@@ -76,7 +76,6 @@ struct RootView: View {
 
 struct MainTabs: View {
     @Environment(AppModel.self) private var model
-    @State private var lastTab: AppTab = .home
 
     var body: some View {
         @Bindable var model = model

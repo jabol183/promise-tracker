@@ -91,8 +91,11 @@ final class StoreManager {
             expiry = t.expirationDate
         }
         var renews = true
-        if let productId, let product = products.first(where: { $0.id == productId }) ?? (try? await Product.products(for: [productId]))?.first,
-           let statuses = try? await product.subscription?.status {
+        var activeProduct = products.first { $0.id == productId }
+        if activeProduct == nil, let productId {
+            activeProduct = (try? await Product.products(for: [productId]))?.first
+        }
+        if let product = activeProduct, let statuses = try? await product.subscription?.status {
             for status in statuses {
                 if case let .verified(info) = status.renewalInfo { renews = info.willAutoRenew }
             }
