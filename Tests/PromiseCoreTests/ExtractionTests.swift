@@ -316,6 +316,19 @@ final class CaptureInterpreterTests: XCTestCase {
         XCTAssertTrue(r.drafts[0].canSave)
     }
 
+    func testDescriptiveDateAfterActionIsNotADeadline() async {
+        let text = "I promised to send Bob the minutes from Tuesday's meeting"
+        let output = PromiseExtraction(promises: [ExtractedPromise(title: "Send Bob the minutes", recipientName: "Bob", sourceSpan: text)])
+        let r = await interpreter(StubExtractor(output: output)).interpret(text, source: .voice, capturedAt: anchor, people: [], existing: [])
+        XCTAssertNil(r.drafts[0].selectedDue)
+    }
+
+    func testHallucinatedSpanCannotAddADeadline() async {
+        let output = PromiseExtraction(promises: [ExtractedPromise(title: "Send the report", sourceSpan: "Send the report Friday")])
+        let r = await interpreter(StubExtractor(output: output)).interpret("Send the report", source: .voice, capturedAt: anchor, people: [], existing: [])
+        XCTAssertNil(r.drafts[0].selectedDue)
+    }
+
     func testUndatedPromiseGetsNoDefaultDate() async {
         let r = await interpreter(nil).interpret("I'll lend Chris my ladder", source: .text, capturedAt: anchor, people: [], existing: [])
         XCTAssertNil(r.drafts.first?.selectedDue)

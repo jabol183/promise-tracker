@@ -90,7 +90,7 @@ public struct CaptureInterpreter: Sendable {
             // Deadline words were left inside the title.
             out.deadlinePhrase = match.phrase
             out.title = Self.removing(match.phrase, from: p.title)
-        } else if let phrase = deadlineAfterAction(title: p.title, span: p.sourceSpan ?? source) {
+        } else if let phrase = deadlineAfterAction(title: p.title, span: groundedSpan(p.sourceSpan, in: source)) {
             // The model dropped the deadline entirely ("Take the rubbish out at 5 pm today").
             out.deadlinePhrase = phrase
         } else {
@@ -99,6 +99,17 @@ public struct CaptureInterpreter: Sendable {
         out.uncertainFields.insert(.deadline)
         return out
     }
+
+    /// The model's span only if it really is part of the user's words; otherwise the input.
+    func groundedSpan(_ span: String?, in source: String) -> String {
+        guard let span, !span.isEmpty,
+              TextNormalizer.normalize(source).contains(TextNormalizer.normalize(span)) else { return source }
+        return span
+    }
+
+    /// Words just before a date that make it describe something else ("from Tuesday's
+    /// meeting", "since Monday") rather than set a deadline.
+    static let descriptiveDatePrefixes: Set<String> = ["from", "of", "since", "last", "about", "during", "regarding"]
 
     /// A date phrase in the user's words that comes *after* the action, so it modifies the
     /// action. A date before the action ("On Tuesday I promised Sarah I'd send…") usually
@@ -119,7 +130,15 @@ public struct CaptureInterpreter: Sendable {
             }
         }
         guard let start = actionStart else { return nil }
-        return resolver.scanner.scan(span).first { $0.range.lowerBound > start }?.phrase
+        return resolver.scanner.scan(span).first { match in
+            guard match.range.lowerBound > start else { return false }
+            // "Tuesday's meeting": the date names something, it isn't a deadline.
+            let tail = String(chars[min(match.range.upperBound, chars.count)...].prefix(2))
+            if tail == "'s" || tail == "’s" { return false }
+            let before = String(chars[..<match.range.lowerBound])
+            let previousWord = TextNormalizer.tokens(before).last ?? ""
+            return !Self.descriptiveDatePrefixes.contains(previousWord)
+        }?.phrase
     }
 
     static func removing(_ phrase: String, from title: String) -> String {
