@@ -60,6 +60,12 @@ public struct RuleBasedExtractor: PromiseExtracting {
     /// "I'll …", "I will …", "I'm going to …", "I need to …"
     private static let will = re("\\bI\\s*(?:['’]ll|\\s+will|['’]m\\s+going\\s+to|\\s+am\\s+going\\s+to|['’]m\\s+gonna|\\s+need\\s+to|\\s+have\\s+to|\\s+must|\\s+got\\s+to|['’]ve\\s+got\\s+to)\\s+(.+)$")
 
+    /// "Remind me to …" / "Remember to …" followed by any action.
+    private static let remindPrefix = re("^\\s*(?:please\\s+)?(?:remind\\s+me\\s+to|remember\\s+to|don['’]t\\s+forget\\s+to)\\s+(.+)$")
+
+    /// An imperative note to self, optionally introduced by "remind me to" / "remember to".
+    private static let noteToSelf = re("^\\s*(?:(?:please\\s+)?(?:remind\\s+me\\s+to|remember\\s+to|don['’]t\\s+forget\\s+to|need\\s+to|have\\s+to|todo:?|to\\s+do:?)\\s+)?((?:send|call|email|e-mail|text|message|ring|phone|pay|buy|get|book|finish|write|bring|return|reply|share|submit|prepare|review|fix|deliver|order|schedule|pick\\s+up|drop\\s+off|follow\\s+up|check|ask|tell|remind|invite|thank|update|organise|organize|sign|renew|cancel|confirm)\\b.+)$")
+
     private static let pronouns: Set<String> = ["him", "her", "them", "you", "me", "us", "it"]
     private static let notNames: Set<String> = [
         "i", "the", "a", "an", "my", "our", "your", "their", "his", "this", "that", "everyone", "someone", "somebody",
@@ -105,6 +111,11 @@ public struct RuleBasedExtractor: PromiseExtracting {
         } else if let m = first(Self.agreed), let rest = group(m, 1) {
             action = rest
         } else if let m = first(Self.will), let rest = group(m, 1) {
+            action = rest
+        } else if let m = first(Self.remindPrefix), let rest = group(m, 1) {
+            action = rest
+        } else if let m = first(Self.noteToSelf), let rest = group(m, 1) {
+            // Notes to self: "Send the deck to Sarah on Tuesday", "Remind me to call Bo".
             action = rest
         } else {
             return nil

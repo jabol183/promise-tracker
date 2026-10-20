@@ -231,7 +231,9 @@ struct PromiseShortcuts: AppShortcutsProvider {
         AppShortcut(intent: AddPromiseIntent(), phrases: [
             "Add a promise in \(.applicationName)",
             "Add a promise to \(.applicationName)",
-            "Remember a promise with \(.applicationName)",
+            "Make a promise in \(.applicationName)",
+            "Log a promise in \(.applicationName)",
+            "Track a promise in \(.applicationName)",
             "New promise in \(.applicationName)",
         ], shortTitle: "Add Promise", systemImageName: "plus.circle")
         AppShortcut(intent: ShowPromisesIntent(), phrases: [

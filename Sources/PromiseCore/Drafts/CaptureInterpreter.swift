@@ -61,8 +61,9 @@ public struct CaptureInterpreter: Sendable {
         return draft
     }
 
-    func makeDraft(_ p: ValidatedPromise, rawText: String, source: SourceType, capturedAt: Date,
+    func makeDraft(_ validated: ValidatedPromise, rawText: String, source: SourceType, capturedAt: Date,
                    people: [Person], existing: [Commitment], engine: String) -> DraftCommitment {
+        let p = recoverDeadline(validated, source: rawText)
         let resolution = resolver.resolve(p.deadlinePhrase, anchor: capturedAt)
         var uncertain = p.uncertainFields
         if resolution.needsConfirmation { uncertain.insert(.deadline) }
@@ -75,6 +76,30 @@ public struct CaptureInterpreter: Sendable {
                                     evidence: p.evidence, uncertainFields: uncertain, engineId: engine)
         draft.possibleDuplicates = duplicates(of: draft, existing: existing)
         return draft
+    }
+
+    /// When an extractor left the deadline words inside the title ("Send it to Sarah on
+    /// Tuesday"), find them deterministically and move them out of the title. Only the
+    /// title is searched: a date elsewhere in the source may describe when the promise was
+    /// made, not when it is due. Recovered deadlines are flagged for review.
+    func recoverDeadline(_ p: ValidatedPromise, source: String) -> ValidatedPromise {
+        guard p.deadlinePhrase == nil, let match = resolver.scanner.scan(p.title).first,
+              source.range(of: match.phrase, options: [.caseInsensitive, .diacriticInsensitive]) != nil else { return p }
+        var out = p
+        out.deadlinePhrase = match.phrase
+        out.title = Self.removing(match.phrase, from: p.title)
+        out.uncertainFields.insert(.deadline)
+        return out
+    }
+
+    static func removing(_ phrase: String, from title: String) -> String {
+        guard let r = title.range(of: phrase, options: [.caseInsensitive]) else { return title }
+        var t = title
+        t.removeSubrange(r)
+        t = t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "(?:\\s*,)?\\s+(?:by|on|at|before|until|for|and)\\s*$", with: "", options: [.regularExpression, .caseInsensitive])
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;-")))
+        return t.isEmpty ? title : t
     }
 
     /// Similar title + same person (+ same day when both dated) among active items.

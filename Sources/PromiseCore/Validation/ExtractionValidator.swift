@@ -66,6 +66,11 @@ public struct ExtractionValidator: Sendable {
             if let raw = item.recipientName.map({ TextNormalizer.sanitize($0, maxLength: 80) }), !raw.isEmpty {
                 if contains(sourceNorm, phrase: raw) {
                     recipient = raw
+                } else if let spelled = closestNameInSource(raw, source: source) {
+                    // Model misspelled a name that *is* in the text ("Sara" for "Sarah"): use the
+                    // user's spelling, but flag it so it is confirmed before saving.
+                    recipient = spelled
+                    uncertain.insert(.recipient)
                 } else {
                     suggested = raw
                     uncertain.insert(.recipient)
@@ -100,7 +105,12 @@ public struct ExtractionValidator: Sendable {
                                              priority: priority, evidence: evidence, uncertainFields: uncertain, sourceSpan: span))
             if promises.count >= Self.maxPromises { break }
         }
-        return ValidatedExtraction(promises: dedupe(promises), skipped: skipped)
+        // A model can label the very same words both as a promise and as "not yours". Only
+        // when a kept promise came from exactly the same span is the notice contradictory;
+        // similar wording ("Sarah promised me…" vs "I promised Sarah…") is kept.
+        let keptSpans = Set(promises.compactMap { $0.sourceSpan.map(TextNormalizer.normalize) })
+        let consistentSkipped = skipped.filter { !keptSpans.contains(TextNormalizer.normalize($0.text)) }
+        return ValidatedExtraction(promises: dedupe(promises), skipped: consistentSkipped)
     }
 
     // MARK: Helpers
@@ -114,11 +124,42 @@ public struct ExtractionValidator: Sendable {
         "explicitpriority": .priority,
     ]
 
+    /// Whole-word match: "Sara" is not found inside "Sarah".
     private func contains(_ normalizedSource: String, phrase: String) -> Bool {
-        let p = TextNormalizer.normalize(phrase)
-        guard !p.isEmpty else { return false }
-        return normalizedSource.contains(p)
+        let needle = TextNormalizer.tokens(phrase)
+        let hay = TextNormalizer.tokens(normalizedSource)
+        guard !needle.isEmpty, needle.count <= hay.count else { return false }
+        for start in 0...(hay.count - needle.count) where Array(hay[start..<(start + needle.count)]) == needle {
+            return true
+        }
+        return false
     }
+
+    /// A capitalized, name-like word in the source within one edit of `name` (single-word
+    /// names only). Sentence-initial words are excluded because they are capitalized for
+    /// grammar ("Email the report"), as are common non-name words.
+    func closestNameInSource(_ name: String, source: String) -> String? {
+        let target = TextNormalizer.normalize(name)
+        guard target.count >= 3, !target.contains(" ") else { return nil }
+        var candidates: [String] = []
+        for sentence in source.components(separatedBy: CharacterSet(charactersIn: ".!?;:\n")) {
+            let words = sentence.components(separatedBy: CharacterSet.letters.inverted).filter { !$0.isEmpty }
+            for word in words.dropFirst() where word.first?.isUppercase == true {
+                let n = TextNormalizer.normalize(word)
+                if Self.nonNameWords.contains(n) { continue }
+                candidates.append(word)
+            }
+        }
+        let matcher = PersonMatcher()
+        let close = Set(candidates.filter { matcher.levenshtein(TextNormalizer.normalize($0), target) == 1 })
+        return close.count == 1 ? close.first : nil
+    }
+
+    static let nonNameWords: Set<String> = [
+        "i", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "january", "february", "march", "april", "may", "june", "july", "august", "september",
+        "october", "november", "december", "today", "tomorrow", "tonight", "siri", "promise", "tracker",
+    ]
 
     private func mostlyGrounded(_ text: String, in sourceTokens: Set<String>) -> Bool {
         let tokens = TextNormalizer.tokens(text).filter { $0.count > 2 }
