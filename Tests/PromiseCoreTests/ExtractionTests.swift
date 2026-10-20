@@ -149,6 +149,27 @@ final class ExtractionValidatorTests: XCTestCase {
         XCTAssertTrue(v.skipped.isEmpty)
     }
 
+    func testDistinctSkippedStatementIsKept() {
+        let e = PromiseExtraction(promises: [
+            ExtractedPromise(kind: .incoming, title: "Quote", sourceSpan: "Sarah promised me a quote"),
+            ExtractedPromise(title: "Send a quote", recipientName: "Sarah", sourceSpan: "I promised Sarah a quote"),
+        ])
+        let v = validator.validate(e, source: "Sarah promised me a quote. I promised Sarah a quote")
+        XCTAssertEqual(v.skipped.map(\.reason), [.incoming])
+    }
+
+    func testTypoCorrectionIgnoresSentenceStartAndFlagsReview() {
+        let verb = PromiseExtraction(promises: [ExtractedPromise(title: "Email the report", recipientName: "Emal")])
+        let v = validator.validate(verb, source: "Email the report tomorrow")
+        XCTAssertNil(v.promises[0].recipientName)
+        XCTAssertEqual(v.promises[0].suggestedRecipient, "Emal")
+
+        let typo = PromiseExtraction(promises: [ExtractedPromise(title: "Send a reminder", recipientName: "Sara")])
+        let t = validator.validate(typo, source: "Send a reminder to Sarah")
+        XCTAssertEqual(t.promises[0].recipientName, "Sarah")
+        XCTAssertTrue(t.promises[0].uncertainFields.contains(.recipient))
+    }
+
     func testInventedDeadlineIsDropped() {
         let e = PromiseExtraction(promises: [ExtractedPromise(title: "Send the deck", deadlinePhrase: "Friday at 5pm")])
         let v = validator.validate(e, source: "I'll send the deck")
@@ -267,6 +288,15 @@ final class CaptureInterpreterTests: XCTestCase {
         XCTAssertEqual(r.drafts[0].personMatch, .new("Sarah"))
         XCTAssertEqual(r.drafts[0].selectedDue?.local, local(2026, 10, 27))
         XCTAssertTrue(r.drafts[0].canSave)
+        // Recovered pieces are highlighted, so Siri quick-save won't skip review.
+        XCTAssertTrue(r.drafts[0].requiresReview)
+    }
+
+    func testDateDescribingWhenPromiseWasMadeIsNotADeadline() async {
+        let text = "On Tuesday I promised Sarah I'd send the report"
+        let output = PromiseExtraction(promises: [ExtractedPromise(title: "Send the report", recipientName: "Sarah", sourceSpan: text)])
+        let r = await interpreter(StubExtractor(output: output)).interpret(text, source: .voice, capturedAt: anchor, people: [], existing: [])
+        XCTAssertNil(r.drafts[0].selectedDue)
     }
 
     func testUndatedPromiseGetsNoDefaultDate() async {

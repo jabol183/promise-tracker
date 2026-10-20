@@ -63,7 +63,7 @@ public struct CaptureInterpreter: Sendable {
 
     func makeDraft(_ validated: ValidatedPromise, rawText: String, source: SourceType, capturedAt: Date,
                    people: [Person], existing: [Commitment], engine: String) -> DraftCommitment {
-        let p = recoverDeadline(validated)
+        let p = recoverDeadline(validated, source: rawText)
         let resolution = resolver.resolve(p.deadlinePhrase, anchor: capturedAt)
         var uncertain = p.uncertainFields
         if resolution.needsConfirmation { uncertain.insert(.deadline) }
@@ -79,16 +79,16 @@ public struct CaptureInterpreter: Sendable {
     }
 
     /// When an extractor left the deadline words inside the title ("Send it to Sarah on
-    /// Tuesday"), find them deterministically and move them out of the title.
-    func recoverDeadline(_ p: ValidatedPromise) -> ValidatedPromise {
-        guard p.deadlinePhrase == nil else { return p }
+    /// Tuesday"), find them deterministically and move them out of the title. Only the
+    /// title is searched: a date elsewhere in the source may describe when the promise was
+    /// made, not when it is due. Recovered deadlines are flagged for review.
+    func recoverDeadline(_ p: ValidatedPromise, source: String) -> ValidatedPromise {
+        guard p.deadlinePhrase == nil, let match = resolver.scanner.scan(p.title).first,
+              source.range(of: match.phrase, options: [.caseInsensitive, .diacriticInsensitive]) != nil else { return p }
         var out = p
-        if let match = resolver.scanner.scan(p.title).first {
-            out.deadlinePhrase = match.phrase
-            out.title = Self.removing(match.phrase, from: p.title)
-        } else if let span = p.sourceSpan, let match = resolver.scanner.scan(span).first {
-            out.deadlinePhrase = match.phrase
-        }
+        out.deadlinePhrase = match.phrase
+        out.title = Self.removing(match.phrase, from: p.title)
+        out.uncertainFields.insert(.deadline)
         return out
     }
 
