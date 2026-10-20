@@ -20,6 +20,7 @@ targets:
     platform: iOS
     sources:
       - path: Sources/PromiseCore
+      - path: App/PromiseCorePrivacy
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jabol183.PromiseCore
@@ -37,6 +38,7 @@ targets:
           - "Info.plist"
     dependencies:
       - target: PromiseCore
+      - sdk: AppIntents.framework
     info:
       path: App/PromiseTracker/Info.plist
       properties:

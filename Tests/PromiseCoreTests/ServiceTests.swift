@@ -159,6 +159,16 @@ final class PromiseServiceTests: XCTestCase {
         XCTAssertEqual(other.allPeople().map(\.displayName), ["Anna"])
     }
 
+    func testAIFollowUpCountOnlyCountsAIRewritesInWindow() throws {
+        let c = try service.save(draft("Send deck")).commitment
+        service.recordFollowUpDrafted(c.id)
+        service.recordFollowUpDrafted(c.id, usedAI: true)
+        clock.advance(by: 8 * 86400)
+        service.recordFollowUpDrafted(c.id, usedAI: true)
+        XCTAssertEqual(service.aiFollowUpCount(since: clock.now.addingTimeInterval(-7 * 86400)), 1)
+        XCTAssertEqual(service.aiFollowUpCount(since: .distantPast), 2)
+    }
+
     func testEraseAll() throws {
         try service.save(draft("Send deck", person: "Anna"))
         try service.eraseAllData()

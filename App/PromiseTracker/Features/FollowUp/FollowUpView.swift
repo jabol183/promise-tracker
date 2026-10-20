@@ -25,8 +25,7 @@ struct FollowUpView: View {
     private var aiRewritesLeft: Int? {
         guard !model.isPro else { return nil }
         let weekAgo = Date().addingTimeInterval(-7 * 86400)
-        let used = model.commitments.flatMap { model.events(for: $0.id) }
-            .filter { $0.eventType == .followupDrafted && $0.occurredAt > weekAgo && $0.payload["ai"] == "1" }.count
+        let used: Int = model.service.aiFollowUpCount(since: weekAgo)
         return max(0, EntitlementPolicy.freeFollowUpDraftsPerWeek - used)
     }
 
