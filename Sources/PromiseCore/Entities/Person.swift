@@ -10,6 +10,11 @@ public struct Person: Codable, Hashable, Identifiable, Sendable {
     public var isArchived: Bool
     /// Set only after Contacts permission and explicit linking (P1).
     public var contactIdentifier: String?
+    /// Optional, user-entered contact channels (no Contacts permission needed).
+    public var phone: String?
+    public var email: String?
+    /// Short relationship label, e.g. "Client · Chen Creative".
+    public var relationship: String?
     /// Set when this person was merged into another; the record is kept so history
     /// still displays meaningfully.
     public var mergedIntoId: UUID?

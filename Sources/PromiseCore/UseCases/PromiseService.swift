@@ -74,7 +74,7 @@ public final class PromiseService: @unchecked Sendable {
                                originalInput: draft.sourceSpan ?? draft.rawText,
                                status: draft.startAsWaiting ? .waiting : .open,
                                createdAt: now, sourceType: draft.sourceType, personId: personId,
-                               priority: draft.priority, details: draft.details, notes: draft.notes,
+                               priority: draft.priority, notificationPolicyId: draft.reminderPolicy.rawValue, details: draft.details, notes: draft.notes,
                                promisedAt: draft.capturedAt, nextAction: draft.nextAction,
                                waitingOnText: draft.startAsWaiting ? draft.waitingOn : nil,
                                waitingSince: draft.startAsWaiting ? now : nil,
@@ -121,7 +121,8 @@ public final class PromiseService: @unchecked Sendable {
         public var isSensitive: Bool?
         public var customReminders: [Date]?
         public var waitingCheckinDays: Int??
-        public init(title: String? = nil, details: String?? = nil, notes: String?? = nil, personId: UUID?? = nil,
+        public var reminderPolicy: ReminderPolicyOption?
+        public init(reminderPolicy: ReminderPolicyOption? = nil, title: String? = nil, details: String?? = nil, notes: String?? = nil, personId: UUID?? = nil,
                     priority: Priority? = nil, nextAction: String?? = nil, tags: [String]? = nil, isPinned: Bool? = nil,
                     isSensitive: Bool? = nil, customReminders: [Date]? = nil, waitingCheckinDays: Int?? = nil) {
             self.title = title
@@ -135,6 +136,7 @@ public final class PromiseService: @unchecked Sendable {
             self.isSensitive = isSensitive
             self.customReminders = customReminders
             self.waitingCheckinDays = waitingCheckinDays
+            self.reminderPolicy = reminderPolicy
         }
     }
 
@@ -154,6 +156,7 @@ public final class PromiseService: @unchecked Sendable {
             if let s = edit.isSensitive, s != c.isSensitive { c.isSensitive = s; changed.append("sensitive") }
             if let r = edit.customReminders, r != c.customReminders { c.customReminders = r; changed.append("reminders") }
             if let w = edit.waitingCheckinDays, w != c.waitingCheckinDays { c.waitingCheckinDays = w; changed.append("checkins") }
+            if let r = edit.reminderPolicy?.rawValue, r != c.notificationPolicyId { c.notificationPolicyId = r; changed.append("reminderPolicy") }
             if let p = edit.personId, p != c.personId {
                 c.personId = p
                 if let pid = p, let name = db.people[pid]?.displayName {
@@ -351,16 +354,17 @@ public final class PromiseService: @unchecked Sendable {
         guard let id = ReminderPlanner.commitmentId(fromReminderId: reminderId) else { return }
         let now = clock.now
         try? database.write { db in
-            guard db.commitments[id] != nil else { return }
+            guard db.commitments[id] != nil,
+                  !db.events.contains(where: { $0.eventType == .reminded && $0.payload["reminder"] == reminderId }) else { return }
             Self.log(&db, id, .reminded, now, .manual, ["reminder": reminderId])
         }
     }
 
-    public func recordFollowUpDrafted(_ id: UUID) {
+    public func recordFollowUpDrafted(_ id: UUID, usedAI: Bool = false) {
         let now = clock.now
         try? database.write { db in
             guard db.commitments[id] != nil else { return }
-            Self.log(&db, id, .followupDrafted, now, .manual, [:])
+            Self.log(&db, id, .followupDrafted, now, .manual, usedAI ? ["ai": "1"] : [:])
         }
     }
 
@@ -382,6 +386,7 @@ public final class PromiseService: @unchecked Sendable {
 
     @discardableResult
     public func updatePerson(_ id: UUID, displayName: String? = nil, aliases: [String]? = nil, notes: String?? = nil,
+                             phone: String?? = nil, email: String?? = nil, relationship: String?? = nil,
                              isArchived: Bool? = nil) throws -> Person {
         let p: Person = try database.write { db in
             guard var p = db.people[id] else { throw DatabaseError.notFound }
@@ -392,6 +397,9 @@ public final class PromiseService: @unchecked Sendable {
             if let a = aliases { p.aliases = a.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }
             if let n = notes { p.notes = n }
             if let a = isArchived { p.isArchived = a }
+            if let v = phone { p.phone = v.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } }
+            if let v = email { p.email = v.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } }
+            if let v = relationship { p.relationship = v.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 } }
             db.people[id] = p
             return p
         }

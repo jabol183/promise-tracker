@@ -29,6 +29,7 @@ public struct ReminderPlanner: Sendable {
 
     public func plan(for c: Commitment, personName: String?, now: Date) -> [ReminderRule] {
         guard c.status.isActive else { return [] } // completed/cancelled/archived/draft → nothing
+        let settings = ReminderPolicyOption(rawValue: c.notificationPolicyId)?.apply(to: self.settings) ?? self.settings
         let cal = c.calendar(base: calendar)
         var rules: [ReminderRule] = []
         let content = ReminderContent(commitment: c, personName: personName)
@@ -43,7 +44,7 @@ public struct ReminderPlanner: Sendable {
         }
         let reminderTime = settings.dateOnlyReminderTime
 
-        if c.status == .waiting {
+        if c.status == .waiting && ReminderPolicyOption(rawValue: c.notificationPolicyId) != ReminderPolicyOption.none {
             // Waiting: check-ins on a cadence, never "overdue".
             let days = max(1, c.waitingCheckinDays ?? settings.waitingCheckinDays)
             let since = c.waitingSince ?? c.updatedAt
@@ -54,7 +55,7 @@ public struct ReminderPlanner: Sendable {
                 guardCount += 1
             }
             add(.waitingCheckin, at(day, reminderTime), title: "Check in", body: content.waitingBody)
-        } else if let local = c.dueLocal {
+        } else if c.status == .open, let local = c.dueLocal {
             switch c.duePrecision {
             case .datetime:
                 let due = WallClock.resolve(local, calendar: cal)?.date
@@ -187,5 +188,39 @@ public struct NotificationReconciler: Sendable {
         let ours = pendingIds.filter { $0.hasPrefix(ReminderPlanner.idPrefix) }
         return Plan(toAdd: upcoming.filter { !pendingIds.contains($0.id) },
                     toRemove: ours.subtracting(desiredIds).sorted())
+    }
+}
+
+/// Per-promise reminder choice shown as "Remind me" on the review card.
+public enum ReminderPolicyOption: String, CaseIterable, Codable, Sendable {
+    /// Follow the rules in Settings.
+    case `default`
+    case dayBefore
+    case onTheDay
+    case dayBeforeAndOnTheDay
+    case none
+
+    public var label: String {
+        switch self {
+        case .default: return "Use my defaults"
+        case .dayBefore: return "The day before"
+        case .onTheDay: return "On the day"
+        case .dayBeforeAndOnTheDay: return "The day before and on the day"
+        case .none: return "No reminders"
+        }
+    }
+
+    func apply(to s: ReminderSettings) -> ReminderSettings {
+        var r = s
+        switch self {
+        case .default: break
+        case .dayBefore: r.dayBefore = true; r.atDue = false; r.hourBefore = false
+        case .onTheDay: r.dayBefore = false; r.atDue = true
+        case .dayBeforeAndOnTheDay: r.dayBefore = true; r.atDue = true
+        case .none:
+            r.dayBefore = false; r.atDue = false; r.hourBefore = false; r.overdueNudge = false
+            r.approximateCheckins = false
+        }
+        return r
     }
 }

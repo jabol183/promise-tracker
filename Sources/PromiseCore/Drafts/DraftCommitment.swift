@@ -26,6 +26,7 @@ public struct DraftCommitment: Codable, Hashable, Identifiable, Sendable {
     public var nextAction: String?
     public var startAsWaiting: Bool
     public var priority: Priority
+    public var reminderPolicy: ReminderPolicyOption = .default
     public var evidence: [FieldEvidence]
     public var uncertainFields: Set<DraftField>
     /// Existing active commitments that look like this one (non-blocking).
