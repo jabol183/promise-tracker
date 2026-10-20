@@ -279,6 +279,8 @@ struct SiriSettingsView: View {
                     .shortcutsLinkStyle(.automaticOutline)
                 Text("You can also assign “Open Capture” to the Action button in iOS Settings › Action Button › Shortcut.")
                     .font(.footnote).foregroundStyle(Theme.inkSecondary).multilineTextAlignment(.center)
+                Text("Say the phrase on its own, wait for “What did you promise?”, then say the promise. Avoid the word “reminder” in the phrase, or Siri may hand it to Apple’s Reminders app.")
+                    .font(.footnote).foregroundStyle(Theme.inkSecondary).multilineTextAlignment(.center)
                 Text("Siri’s language support and follow-up questions are controlled by iOS and may vary.")
                     .font(.caption).foregroundStyle(Theme.inkTertiary).multilineTextAlignment(.center)
             }

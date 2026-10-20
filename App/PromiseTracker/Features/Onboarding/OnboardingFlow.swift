@@ -120,7 +120,7 @@ private struct SiriPrivacyScreen: View {
                 Label("Add commitments with your voice", systemImage: "mic")
                 Label("Find and update promises", systemImage: "magnifyingglass")
                 Label("Get reminders at the right time", systemImage: "bell")
-                Label("No account. No cloud AI. Your promises stay on your iPhone.", systemImage: "lock")
+                Label("Private: no account, no cloud AI", systemImage: "lock")
             }
             .font(.subheadline)
             .foregroundStyle(Theme.inkSecondary)

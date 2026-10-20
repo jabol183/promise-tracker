@@ -66,6 +66,9 @@ public struct ExtractionValidator: Sendable {
             if let raw = item.recipientName.map({ TextNormalizer.sanitize($0, maxLength: 80) }), !raw.isEmpty {
                 if contains(sourceNorm, phrase: raw) {
                     recipient = raw
+                } else if let spelled = closestNameInSource(raw, source: source) {
+                    // Model misspelled a name that *is* in the text ("Sara" for "Sarah"): use the user's spelling.
+                    recipient = spelled
                 } else {
                     suggested = raw
                     uncertain.insert(.recipient)
@@ -100,7 +103,17 @@ public struct ExtractionValidator: Sendable {
                                              priority: priority, evidence: evidence, uncertainFields: uncertain, sourceSpan: span))
             if promises.count >= Self.maxPromises { break }
         }
-        return ValidatedExtraction(promises: dedupe(promises), skipped: skipped)
+        // A model can label the same words both as a promise and as "not yours". When a kept
+        // promise covers the same words, the contradictory notice is dropped.
+        let keptSpans = promises.map { Set(TextNormalizer.tokens($0.sourceSpan ?? $0.title)) }
+        let consistentSkipped = skipped.filter { s in
+            let tokens = Set(TextNormalizer.tokens(s.text))
+            return !keptSpans.contains { kept in
+                let union = kept.union(tokens).count
+                return union > 0 && Double(kept.intersection(tokens).count) / Double(union) >= 0.6
+            }
+        }
+        return ValidatedExtraction(promises: dedupe(promises), skipped: consistentSkipped)
     }
 
     // MARK: Helpers
@@ -114,10 +127,25 @@ public struct ExtractionValidator: Sendable {
         "explicitpriority": .priority,
     ]
 
+    /// Whole-word match: "Sara" is not found inside "Sarah".
     private func contains(_ normalizedSource: String, phrase: String) -> Bool {
-        let p = TextNormalizer.normalize(phrase)
-        guard !p.isEmpty else { return false }
-        return normalizedSource.contains(p)
+        let needle = TextNormalizer.tokens(phrase)
+        let hay = TextNormalizer.tokens(normalizedSource)
+        guard !needle.isEmpty, needle.count <= hay.count else { return false }
+        for start in 0...(hay.count - needle.count) where Array(hay[start..<(start + needle.count)]) == needle {
+            return true
+        }
+        return false
+    }
+
+    /// A capitalized word in the source within one edit of `name` (single-word names only).
+    func closestNameInSource(_ name: String, source: String) -> String? {
+        let target = TextNormalizer.normalize(name)
+        guard target.count >= 3, !target.contains(" ") else { return nil }
+        let words = source.components(separatedBy: CharacterSet.letters.inverted).filter { $0.first?.isUppercase == true }
+        let matcher = PersonMatcher()
+        let close = Set(words.filter { matcher.levenshtein(TextNormalizer.normalize($0), target) == 1 })
+        return close.count == 1 ? close.first : nil
     }
 
     private func mostlyGrounded(_ text: String, in sourceTokens: Set<String>) -> Bool {

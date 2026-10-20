@@ -93,6 +93,20 @@ final class RuleBasedExtractorTests: XCTestCase {
         XCTAssertEqual(p.first?.recipientName, "Ken")
     }
 
+    func testNoteToSelfImperative() {
+        let p = commitments("Send a reminder to Sarah on Tuesday")
+        XCTAssertEqual(p.count, 1)
+        XCTAssertEqual(p.first?.title, "Send a reminder to Sarah")
+        XCTAssertEqual(p.first?.recipientName, "Sarah")
+        XCTAssertEqual(p.first?.deadlinePhrase, "on Tuesday")
+    }
+
+    func testRemindMeToAnyAction() {
+        let p = commitments("Remind me to water Anna's plants tomorrow")
+        XCTAssertEqual(p.first?.title, "Water Anna's plants")
+        XCTAssertEqual(p.first?.deadlinePhrase, "tomorrow")
+    }
+
     func testNonPromiseTextYieldsNothing() {
         XCTAssertTrue(commitments("The weather was lovely at the park today").isEmpty)
         XCTAssertTrue(commitments("").isEmpty)
@@ -109,6 +123,30 @@ final class ExtractionValidatorTests: XCTestCase {
         XCTAssertNil(v.promises[0].recipientName)
         XCTAssertEqual(v.promises[0].suggestedRecipient, "Anna")
         XCTAssertTrue(v.promises[0].uncertainFields.contains(.recipient))
+    }
+
+    func testRecipientMustMatchWholeWord() {
+        // "Sara" is inside "Sarah" but is a different name; use the user's spelling.
+        let e = PromiseExtraction(promises: [ExtractedPromise(title: "Send a reminder", recipientName: "Sara")])
+        let v = validator.validate(e, source: "Send a reminder to Sarah on Tuesday")
+        XCTAssertEqual(v.promises[0].recipientName, "Sarah")
+        XCTAssertNil(v.promises[0].suggestedRecipient)
+
+        let unrelated = PromiseExtraction(promises: [ExtractedPromise(title: "Send the deck", recipientName: "Ann")])
+        let u = validator.validate(unrelated, source: "I'll send the deck to Joanna")
+        XCTAssertNil(u.promises[0].recipientName)
+        XCTAssertEqual(u.promises[0].suggestedRecipient, "Ann")
+    }
+
+    func testContradictorySkippedNoticeIsDropped() {
+        let text = "Send a reminder to Sarah on Tuesday"
+        let e = PromiseExtraction(promises: [
+            ExtractedPromise(kind: .incoming, title: text, sourceSpan: text),
+            ExtractedPromise(title: "Send a reminder to Sarah on Tuesday", recipientName: "Sara", sourceSpan: text),
+        ])
+        let v = validator.validate(e, source: text)
+        XCTAssertEqual(v.promises.count, 1)
+        XCTAssertTrue(v.skipped.isEmpty)
     }
 
     func testInventedDeadlineIsDropped() {
@@ -213,6 +251,22 @@ final class CaptureInterpreterTests: XCTestCase {
         var confirmed = d
         confirmed.choose(candidate: d.dateResolution.candidates[0])
         XCTAssertTrue(confirmed.canSave)
+    }
+
+    func testDeadlineLeftInTitleIsRecovered() async {
+        // Reproduces a device run: the model kept "on Tuesday" in the title and misspelled the name.
+        let text = "Send a reminder to Sarah on Tuesday"
+        let output = PromiseExtraction(promises: [
+            ExtractedPromise(kind: .incoming, title: text, sourceSpan: text),
+            ExtractedPromise(title: text, recipientName: "Sara", sourceSpan: text),
+        ])
+        let r = await interpreter(StubExtractor(output: output)).interpret(text, source: .voice, capturedAt: anchor, people: [], existing: [])
+        XCTAssertTrue(r.skipped.isEmpty)
+        XCTAssertEqual(r.drafts.count, 1)
+        XCTAssertEqual(r.drafts[0].title, "Send a reminder to Sarah")
+        XCTAssertEqual(r.drafts[0].personMatch, .new("Sarah"))
+        XCTAssertEqual(r.drafts[0].selectedDue?.local, local(2026, 10, 27))
+        XCTAssertTrue(r.drafts[0].canSave)
     }
 
     func testUndatedPromiseGetsNoDefaultDate() async {
