@@ -309,7 +309,9 @@ struct DraftEditor: View {
             var parts: [String] = []
             if r.dayBefore { parts.append("the day before") }
             if r.atDue { parts.append(due.precision == .datetime ? "when it’s due" : "on the day at \(time)") }
-            return parts.isEmpty ? "No reminders" : parts.joined(separator: " and ").prefix(1).uppercased() + parts.joined(separator: " and ").dropFirst()
+            guard !parts.isEmpty else { return "No reminders" }
+            let sentence: String = parts.joined(separator: " and ")
+            return sentence.prefix(1).uppercased() + String(sentence.dropFirst())
         }
     }
 }

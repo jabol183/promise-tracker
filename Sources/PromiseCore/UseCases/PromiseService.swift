@@ -360,6 +360,16 @@ public final class PromiseService: @unchecked Sendable {
         }
     }
 
+    /// AI follow-up rewrites since `date` (used for the free-plan weekly allowance).
+    public func aiFollowUpCount(since date: Date) -> Int {
+        database.read { db in
+            db.events.filter { event in
+                guard event.eventType == .followupDrafted, event.payload["ai"] == "1" else { return false }
+                return event.occurredAt > date
+            }.count
+        }
+    }
+
     public func recordFollowUpDrafted(_ id: UUID, usedAI: Bool = false) {
         let now = clock.now
         try? database.write { db in
