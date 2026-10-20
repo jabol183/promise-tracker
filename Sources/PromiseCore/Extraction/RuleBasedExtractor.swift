@@ -64,7 +64,7 @@ public struct RuleBasedExtractor: PromiseExtracting {
     private static let remindPrefix = re("^\\s*(?:please\\s+)?(?:remind\\s+me\\s+to|remember\\s+to|don['’]t\\s+forget\\s+to)\\s+(.+)$")
 
     /// An imperative note to self, optionally introduced by "remind me to" / "remember to".
-    private static let noteToSelf = re("^\\s*(?:(?:please\\s+)?(?:remind\\s+me\\s+to|remember\\s+to|don['’]t\\s+forget\\s+to|need\\s+to|have\\s+to|todo:?|to\\s+do:?)\\s+)?((?:send|call|email|e-mail|text|message|ring|phone|pay|buy|get|book|finish|write|bring|return|reply|share|submit|prepare|review|fix|deliver|order|schedule|pick\\s+up|drop\\s+off|follow\\s+up|check|ask|tell|remind|invite|thank|update|organise|organize|sign|renew|cancel|confirm)\\b.+)$")
+    private static let noteToSelf = re("^\\s*(?:(?:please\\s+)?(?:remind\\s+me\\s+to|remember\\s+to|don['’]t\\s+forget\\s+to|need\\s+to|have\\s+to|todo:?|to\\s+do:?)\\s+)?((?:send|call|email|e-mail|text|message|ring|phone|pay|buy|get|book|finish|write|bring|return|reply|share|submit|prepare|review|fix|deliver|order|schedule|pick\\s+up|drop\\s+off|follow\\s+up|check|ask|tell|remind|invite|thank|update|organise|organize|sign|renew|cancel|confirm|take|put|clean|wash|water|feed|collect|visit|meet|go|do|make|cook|tidy|walk|empty|mow|file|print|post|pack|pick|drop|lend|hand|transfer|move|install|test|plan|draft|read|watch|finish|start|charge)\\b.+)$")
 
     private static let pronouns: Set<String> = ["him", "her", "them", "you", "me", "us", "it"]
     private static let notNames: Set<String> = [
